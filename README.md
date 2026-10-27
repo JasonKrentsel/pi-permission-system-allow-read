@@ -1,0 +1,93 @@
+# Pi permission system: allow reads, ask for writes
+
+A personal configuration for [gotgenes/pi-permission-system](https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system), tested with **41.0.0** and **Pi 1.4.0** on Windows.
+
+The goal is to keep ordinary exploration quick while giving the user a moment to review changes and complex commands.
+
+## Behavior
+
+| Operation | Decision |
+| --- | --- |
+| Read, grep, find, or list ordinary files inside the current directory tree | Allow |
+| Listed read-only Bash commands and ordinary Git inspection | Allow |
+| Formatting with `echo`, including arbitrary strings | Allow |
+| Write or edit an ordinary project file | Ask once |
+| Literal redirects to ordinary output files | Ask |
+| Literal `/dev/null`, `/dev/stdout`, or `/dev/stderr` destinations | Allow |
+| Access outside the current directory tree | Ask; outside writes can encounter an additional boundary prompt |
+| Explicitly named `.env`, certificates, private keys, and listed credential paths | Deny |
+| Unknown tools, scripts, installs, tests, PowerShell commands, or unlisted Bash commands | Ask |
+
+`write` and `edit` are allowed at the tool surface because `path_write` supplies the approval. Asking at both surfaces produces duplicate prompts. Keep the path rules when modifying this configuration.
+
+Manual approval is enabled, automatic authorizers and YOLO mode are disabled, and approval requires confirmation. Permission review logging is enabled; logs are local and excluded from this repository.
+
+## Install the configuration
+
+Install the matching upstream extension:
+
+```text
+pi install npm:@gotgenes/pi-permission-system@41.0.0
+```
+
+Copy this repository's `config.json` to:
+
+```text
+~/.pi/agent/extensions/pi-permission-system/config.json
+```
+
+For example, in PowerShell from this repository:
+
+```powershell
+$permissionDirectory = Join-Path $env:USERPROFILE '.pi/agent/extensions/pi-permission-system'
+New-Item -ItemType Directory -Force -Path $permissionDirectory | Out-Null
+Copy-Item -LiteralPath ./config.json -Destination (Join-Path $permissionDirectory 'config.json')
+```
+
+Restart Pi after installation. Project-specific policies and session approvals can change the effective decisions.
+
+## Computed output redirects
+
+The JSON alone does not cover every computed redirect in upstream 41.0.0. This repository includes the local source patch used with this configuration:
+
+```bash
+cat README.md > "$OUTPUT"
+cat README.md > $(echo output.txt)
+```
+
+An otherwise allowed command with an unresolved output destination asks for approval and displays the complete command. Literal `/dev/null` remains allowed. The check uses the existing Bash syntax tree; a quoted string that merely contains `>` is not treated as a redirect. Existing denies and user session grants retain precedence.
+
+Check or apply the patch with Node.js:
+
+```text
+node scripts/patch-computed-redirects.mjs --check
+node scripts/patch-computed-redirects.mjs --apply
+```
+
+The default package location is `~/.pi/agent/npm/node_modules/@gotgenes/pi-permission-system`. Pass a different package directory as an argument, or set `PI_PERMISSION_PACKAGE`. The script checks the package version and exact source hashes before writing, is safe to reapply, and supports `--revert`. Restart Pi afterward. Reinstalling or upgrading the upstream package can overwrite this local patch.
+
+This is a configuration and a local patch, not an upstream release or a separate permission extension. The patch modifies four upstream source files; it does not change the JSON policy.
+
+## Accepted behavior and scope
+
+- Broad session approvals may supersede secret-file denies. This is intentional for this setup.
+- Windows alternate-stream file aliases are not covered by the secret patterns. Their existing behavior is intentional for this setup.
+- Explicit secret filenames are checked, but recursive searches, shell globs, and unresolved variable reads can reach contents without explicitly naming those filenames. This is a review-oriented permission configuration, not filesystem isolation.
+- `.env.example` and other names matched by `*.env.*` are denied too.
+- PowerShell and unconfigured alternative shell tools ask, but do not receive Bash-specific path analysis.
+
+## Verification
+
+The decision-level regression suite contains **2,501 checks**, including 267 computed-redirect cases, 72 literal `/dev/null` cases, and 126 ordinary in-project edit/write path variants that each ask exactly once. Alias and session tests assert the accepted behavior above. Pi startup was also checked with the patched extension.
+
+Run the suite against your installed extension:
+
+```text
+node tests/audit.cjs
+```
+
+It defaults to the managed Pi 1.4.0 installation under `~/.pi/agent/install/releases/1.4.0/node_modules`. Set `PI_NODE_MODULES` to the directory containing your Pi SDK, pi-tui, and jiti dependencies when using another layout. Set `PI_PERMISSION_PACKAGE` for a different extension location. An optional first argument selects a different configuration file.
+
+The suite creates synthetic fixtures and writes its report under `.test-artifacts/`, which Git ignores. It uses the installed parser, policy loader, gate pipeline, and GateRunner with simulated human decisions. Proposed shell commands and file tools are not executed; there are no model requests. Junction checks require permission to create local junctions. This finite regression suite does not prove behavior for every possible shell program.
+
+Upstream extension code and APIs belong to the gotgenes project. Its MIT license is preserved in `patches/UPSTREAM-LICENSE` for the upstream snippets included in the patch specification. This repository publishes a personal policy, a small patch specification, and its regression harness; it contains no user sessions or permission logs.

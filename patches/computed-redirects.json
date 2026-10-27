@@ -1,0 +1,70 @@
+{
+  "package": "@gotgenes/pi-permission-system",
+  "version": "41.0.0",
+  "files": [
+    {
+      "relative": "src/access-intent/bash/program.ts",
+      "before": "f01a108496f004698a19e29b9aea5983a4047f746c9dd2222aa7488a36086498",
+      "after": "54c340cae1a3b7fc5fd261aa5f8b5f9b5ae3349b4af4d5a051e85eda5999c30d",
+      "replacements": [
+        {
+          "from": "import { WordReader } from \"./node-text\";",
+          "to": "import { WordReader } from \"./node-text\";\nimport { redirectEffectForDestination, redirectTargetIndex } from \"./redirect-analysis\";\nimport type { TSNode } from \"./parser\";"
+        },
+        {
+          "from": "    private readonly spelledVerbatim: boolean,",
+          "to": "    private readonly spelledVerbatim: boolean,\n    private readonly computedOutputRedirect = false,"
+        },
+        {
+          "from": "            !LINE_CONTINUATION.test(command),",
+          "to": "            !LINE_CONTINUATION.test(command),\n          [tree.rootNode, ...salvaged].some(root => hasComputedOutputRedirect(root, words)),"
+        },
+        {
+          "from": "  commandText(): string {",
+          "to": "  hasComputedOutputRedirect(): boolean {\n    return this.computedOutputRedirect;\n  }\n\n  commandText(): string {"
+        },
+        {
+          "from": "export type { BashCommand, BashExternalPath, BashPathRuleCandidate };",
+          "to": "export type { BashCommand, BashExternalPath, BashPathRuleCandidate };\n\n// Local policy patch: an unresolved write destination cannot be checked by\n// path_write. Keep that uncertainty visible to the command approval gate.\nfunction hasComputedOutputRedirect(node: TSNode, words: WordReader): boolean {\n  if (node.type === \"file_redirect\") {\n    const index = redirectTargetIndex(node);\n    const target = index === undefined ? null : node.child(index);\n    if (target) {\n      const effect = redirectEffectForDestination(node, target);\n      if (effect !== null && effect.effect !== \"read\" && words.argWord(target).computed) {\n        return true;\n      }\n    }\n  }\n  for (let i = 0; i < node.childCount; i++) {\n    const child = node.child(i);\n    if (child && hasComputedOutputRedirect(child, words)) return true;\n  }\n  return false;\n}"
+        }
+      ]
+    },
+    {
+      "relative": "src/handlers/gates/bash-command.ts",
+      "before": "beb3ac9d82f790a98b8015fa2cb0a611f87ccb0ec19a532aabbb43f487b06908",
+      "after": "6a9cbad10d6837c193b6611347efb4563b2104434b8d265c82f8fcf3adb24b86",
+      "replacements": [
+        {
+          "from": "  commands: BashCommand[],\n  agentName: string | undefined,\n  resolver: ScopedPermissionResolver,",
+          "to": "  commands: BashCommand[],\n  agentName: string | undefined,\n  resolver: ScopedPermissionResolver,\n  computedOutputRedirect = false,"
+        },
+        {
+          "from": "  return withAskingUnits(withChainFloor(winner, results), results);",
+          "to": "  // Preserve existing denies, asks and user session grants. For an otherwise\n  // allowed program, show the whole command so the computed destination is\n  // included in both the review and any session approval suggestion.\n  if (computedOutputRedirect && winner.state === \"allow\" && !isSessionGrant(winner)) {\n    const whole = resolveOnBashSurface(command, [], agentName, resolver);\n    const guarded = whole.state === \"allow\" && !isSessionGrant(whole)\n      ? { ...floorToAsk(whole, \"<computed-output-redirect>\"), command }\n      : whole;\n    return withAskingUnits(guarded, [guarded]);\n  }\n  return withAskingUnits(withChainFloor(winner, results), results);"
+        }
+      ]
+    },
+    {
+      "relative": "src/handlers/gates/tool-call-gate-pipeline.ts",
+      "before": "85c2ecf1312de1b54e06862508f673b0b2fbca98abf8039197b9854a2247f88b",
+      "after": "72e20cc5e7c489a64a2ecc9b8826fe9f91e15f410c2c1c73398bfa2d5c3e0bda",
+      "replacements": [
+        {
+          "from": "            this.resolver,\n          ),",
+          "to": "            this.resolver,\n            bashProgram.hasComputedOutputRedirect(),\n          ),"
+        }
+      ]
+    },
+    {
+      "relative": "src/service/bash-advisory-check.ts",
+      "before": "aeb6f3a7c9735faef619f34c98a569a3eb5f255c656835062a6b40f0f69ba893",
+      "after": "dceeaf65c746e0fff4729f72ff9aa61dfd705c45db573e7733cff0ef211940ec",
+      "replacements": [
+        {
+          "from": "    resolver,\n  );",
+          "to": "    resolver,\n    program.hasComputedOutputRedirect(),\n  );"
+        }
+      ]
+    }
+  ]
+}
