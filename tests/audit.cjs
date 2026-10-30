@@ -148,6 +148,25 @@ function digestTree(dir) {
   for(const command of ['echo \'literal > "$OUTPUT"\'', 'echo \'literal $(echo out)\'', 'echo hello # > "$OUTPUT"', 'echo "$OUTPUT"', 'cat < "$INPUT"'])await test('redirect false positives',command,'bash',{command},{state:'allow',prompts:0});
   await test('computed redirect user denial','deny unresolved output','bash',{command:'cat src/a.txt > "$OUTPUT"'},{state:'ask-denied',prompts:1},{decision:'deny'});
 
+  for(const target of [cwd,'/c/'+cwd.slice(3),'/C/'+cwd.slice(3),'.','./src'])for(const prefix of ['cd "'+target+'"','cd -- "'+target+'"'])for(const tail of [' && ls .','; echo "reading project"']) {
+    const command=prefix+tail;
+    await test('project cd',command,'bash',{command},{state:'allow',prompts:0});
+  }
+  for(const target of [outside,'/c/'+outside.slice(3),'/C/'+outside.slice(3)])for(const tail of [' && ls .','; cat outside.txt']) {
+    const command='cd "'+target+'"'+tail;
+    await test('outside cd',command,'bash',{command},{state:'ask'});
+  }
+  for(const command of ['cd "$UNKNOWN" && ls','cd ${UNKNOWN} && ls','cd "$(echo .)" && ls','cd - && ls','cd -- && ls','cd "" && ls','cd $((1 + 1)) && ls','cd ./s* && ls'])await test('unresolved cd',command,'bash',{command},{state:'ask'});
+  for(const target of [cwd,'/c/'+cwd.slice(3),'/C/'+cwd.slice(3)]) {
+    for(const tail of [' && echo x > out.txt',' && cat src/a.txt > "$OUTPUT"',' && rm src/a.txt']) {
+      const command='cd "'+target+'"'+tail;
+      await test('cd preserves write approval',command,'bash',{command},{state:'ask'});
+    }
+    const command='cd "'+target+'" && cat .env';
+    await test('cd preserves secret deny',command,'bash',{command},{state:'deny',prompts:0});
+  }
+  // WSL paths are not Git Bash drive mounts; retain the boundary prompt.
+  await test('different shell path','WSL spelling stays external in Git Bash','bash',{command:'cd "/mnt/c/'+cwd.slice(3)+'" && ls'},{state:'ask'});
   const denied=engine();await test('user decisions','user denies project write','write',{path:'new.txt',content:'x'},{state:'ask-denied',prompts:1},{e:denied,decision:'deny'});
   const once=engine();for(let i=0;i<2;i++)await test('user decisions','approve once asks again '+i,'write',{path:'new.txt',content:'x'},{state:'ask',prompts:1},{e:once});
   const session=engine();await test('session approvals','first write session approval','write',{path:'src/new.txt',content:'x'},{state:'ask',prompts:1},{e:session,grant:true});

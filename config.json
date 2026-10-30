@@ -158,6 +158,7 @@
       "*": "ask",
       "echo": "allow",
       "echo *": "allow",
+      "cd *": "allow",
       "pwd": "allow",
       "ls": "allow",
       "ls *": "allow",

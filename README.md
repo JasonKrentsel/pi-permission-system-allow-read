@@ -10,6 +10,8 @@ The goal is to keep ordinary exploration quick while giving the user a moment to
 | --- | --- |
 | Read, grep, find, or list ordinary files inside the current directory tree | Allow |
 | Listed read-only Bash commands and ordinary Git inspection | Allow |
+| Literal `cd` into the current project, including Git Bash `/c/...` and `/C/...` drive paths | Allow; the rest of the command is checked separately |
+| `cd` outside the project or an unresolved destination such as `cd "$DIR"` | Ask |
 | Formatting with `echo`, including arbitrary strings | Allow |
 | Write or edit an ordinary project file | Ask once |
 | Literal redirects to ordinary output files | Ask |
@@ -44,9 +46,9 @@ New-Item -ItemType Directory -Force -Path $permissionDirectory | Out-Null
 Copy-Item -LiteralPath ./config.json -Destination (Join-Path $permissionDirectory 'config.json')
 ```
 
-Restart Pi after installation. Project-specific policies and session approvals can change the effective decisions.
+Apply the source patch below as part of this setup, then restart Pi. Project-specific policies and session approvals can change the effective decisions.
 
-## Computed output redirects
+## Source patch: computed redirects and unresolved directory changes
 
 The JSON alone does not cover every computed redirect in upstream 41.0.0. This repository includes the local source patch used with this configuration:
 
@@ -57,6 +59,10 @@ cat README.md > $(echo output.txt)
 
 An otherwise allowed command with an unresolved output destination asks for approval and displays the complete command. Literal `/dev/null` remains allowed. The check uses the existing Bash syntax tree; a quoted string that merely contains `>` is not treated as a redirect. Existing denies and user session grants retain precedence.
 
+The `cd *` configuration rule avoids asking just because a model prefixes a read-only command with a full-path `cd` to the project. The ordinary path and boundary gates still check the destination. The source patch also keeps unresolved destinations, `cd -`, missing destinations, and globs asking rather than letting them inherit that broad rule. Install the patch along with the JSON to retain this behavior.
+
+For example, `cd "/c/path/to/project" && ls` is allowed when that resolves inside the current project; changing to a sibling project still asks. `/mnt/c/...` is a WSL spelling, not a Git Bash drive mount, and retains the boundary prompt on this Git Bash setup.
+
 Check or apply the patch with Node.js:
 
 ```text
@@ -64,7 +70,7 @@ node scripts/patch-computed-redirects.mjs --check
 node scripts/patch-computed-redirects.mjs --apply
 ```
 
-The default package location is `~/.pi/agent/npm/node_modules/@gotgenes/pi-permission-system`. Pass a different package directory as an argument, or set `PI_PERMISSION_PACKAGE`. The script checks the package version and exact source hashes before writing, is safe to reapply, and supports `--revert`. Restart Pi afterward. Reinstalling or upgrading the upstream package can overwrite this local patch.
+The default package location is `~/.pi/agent/npm/node_modules/@gotgenes/pi-permission-system`. Pass a different package directory as an argument, or set `PI_PERMISSION_PACKAGE`. The script checks the package version and exact source hashes before writing, is safe to reapply, upgrades the previous computed-redirect-only patch, and supports `--revert`. Restart Pi afterward. Reinstalling or upgrading the upstream package can overwrite this local patch. If reverting the patch, also remove the `cd *` allow rule to restore prompts for unresolved directory changes.
 
 This is a configuration and a local patch, not an upstream release or a separate permission extension. The patch modifies four upstream source files; it does not change the JSON policy.
 
@@ -78,7 +84,7 @@ This is a configuration and a local patch, not an upstream release or a separate
 
 ## Verification
 
-The decision-level regression suite contains **2,501 checks**, including 267 computed-redirect cases, 72 literal `/dev/null` cases, and 126 ordinary in-project edit/write path variants that each ask exactly once. Alias and session tests assert the accepted behavior above. Pi startup was also checked with the patched extension.
+The decision-level regression suite contains **2,548 checks** when junction fixtures are available, including 267 computed-redirect cases, 72 literal `/dev/null` cases, 47 directory-change cases, and 126 ordinary in-project edit/write path variants that each ask exactly once. Six junction checks are skipped if local permissions prevent creating those fixtures. Alias and session tests assert the accepted behavior above. Pi startup was also checked with the patched extension.
 
 Run the suite against your installed extension:
 

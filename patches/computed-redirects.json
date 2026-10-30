@@ -5,7 +5,7 @@
     {
       "relative": "src/access-intent/bash/program.ts",
       "before": "f01a108496f004698a19e29b9aea5983a4047f746c9dd2222aa7488a36086498",
-      "after": "54c340cae1a3b7fc5fd261aa5f8b5f9b5ae3349b4af4d5a051e85eda5999c30d",
+      "after": "d6964bd7d171a89f37ab09a2fef5f8dfca65c9d4166cee0591c1f20b49a6f92c",
       "replacements": [
         {
           "from": "import { WordReader } from \"./node-text\";",
@@ -26,13 +26,58 @@
         {
           "from": "export type { BashCommand, BashExternalPath, BashPathRuleCandidate };",
           "to": "export type { BashCommand, BashExternalPath, BashPathRuleCandidate };\n\n// Local policy patch: an unresolved write destination cannot be checked by\n// path_write. Keep that uncertainty visible to the command approval gate.\nfunction hasComputedOutputRedirect(node: TSNode, words: WordReader): boolean {\n  if (node.type === \"file_redirect\") {\n    const index = redirectTargetIndex(node);\n    const target = index === undefined ? null : node.child(index);\n    if (target) {\n      const effect = redirectEffectForDestination(node, target);\n      if (effect !== null && effect.effect !== \"read\" && words.argWord(target).computed) {\n        return true;\n      }\n    }\n  }\n  for (let i = 0; i < node.childCount; i++) {\n    const child = node.child(i);\n    if (child && hasComputedOutputRedirect(child, words)) return true;\n  }\n  return false;\n}"
+        },
+        {
+          "from": "import { WordReader } from \"./node-text\";",
+          "to": "import { WordReader } from \"./node-text\";\nimport { commandWordNodes } from \"./nested-execution\";"
+        },
+        {
+          "from": "    private readonly computedOutputRedirect = false,",
+          "to": "    private readonly computedOutputRedirect = false,\n    private readonly unresolvedDirectoryChange = false,"
+        },
+        {
+          "from": "          [tree.rootNode, ...salvaged].some(root => hasComputedOutputRedirect(root, words)),",
+          "to": "          [tree.rootNode, ...salvaged].some(root => hasComputedOutputRedirect(root, words)),\n          [tree.rootNode, ...salvaged].some(root => hasUnresolvedDirectoryChange(root, words)),"
+        },
+        {
+          "from": "  hasComputedOutputRedirect(): boolean {",
+          "to": "  hasUnresolvedDirectoryChange(): boolean {\n    return this.unresolvedDirectoryChange;\n  }\n\n  hasComputedOutputRedirect(): boolean {"
+        },
+        {
+          "from": "/** What a caller may tell {@link BashProgram.parse} beyond the command text. */",
+          "to": "// Literal cd targets remain subject to the normal path and directory gates.\n// Unknown targets must not inherit a broad read-only cd rule.\nfunction hasUnresolvedDirectoryChange(node: TSNode, words: WordReader): boolean {\n  if (node.type === \"command\") {\n    const args = commandWordNodes(node).map(arg => words.argWord(arg));\n    if (args[0]?.value === \"cd\") {\n      const operands = args.slice(1);\n      while (operands.length && !operands[0].computed && [\"-L\", \"-P\", \"-e\", \"--\"].includes(operands[0].value)) {\n        if (operands.shift()!.value === \"--\") break;\n      }\n      if (operands.length !== 1 || operands[0].computed || operands[0].value === \"-\" || operands[0].value === \"\" || operands[0].value.startsWith(\"-\")) return true;\n    }\n  }\n  for (let i = 0; i < node.childCount; i++) {\n    const child = node.child(i);\n    if (child && hasUnresolvedDirectoryChange(child, words)) return true;\n  }\n  return false;\n}\n\n/** What a caller may tell {@link BashProgram.parse} beyond the command text. */"
         }
-      ]
+      ],
+      "previous": {
+        "hash": "54c340cae1a3b7fc5fd261aa5f8b5f9b5ae3349b4af4d5a051e85eda5999c30d",
+        "replacements": [
+          {
+            "from": "import { WordReader } from \"./node-text\";",
+            "to": "import { WordReader } from \"./node-text\";\nimport { redirectEffectForDestination, redirectTargetIndex } from \"./redirect-analysis\";\nimport type { TSNode } from \"./parser\";"
+          },
+          {
+            "from": "    private readonly spelledVerbatim: boolean,",
+            "to": "    private readonly spelledVerbatim: boolean,\n    private readonly computedOutputRedirect = false,"
+          },
+          {
+            "from": "            !LINE_CONTINUATION.test(command),",
+            "to": "            !LINE_CONTINUATION.test(command),\n          [tree.rootNode, ...salvaged].some(root => hasComputedOutputRedirect(root, words)),"
+          },
+          {
+            "from": "  commandText(): string {",
+            "to": "  hasComputedOutputRedirect(): boolean {\n    return this.computedOutputRedirect;\n  }\n\n  commandText(): string {"
+          },
+          {
+            "from": "export type { BashCommand, BashExternalPath, BashPathRuleCandidate };",
+            "to": "export type { BashCommand, BashExternalPath, BashPathRuleCandidate };\n\n// Local policy patch: an unresolved write destination cannot be checked by\n// path_write. Keep that uncertainty visible to the command approval gate.\nfunction hasComputedOutputRedirect(node: TSNode, words: WordReader): boolean {\n  if (node.type === \"file_redirect\") {\n    const index = redirectTargetIndex(node);\n    const target = index === undefined ? null : node.child(index);\n    if (target) {\n      const effect = redirectEffectForDestination(node, target);\n      if (effect !== null && effect.effect !== \"read\" && words.argWord(target).computed) {\n        return true;\n      }\n    }\n  }\n  for (let i = 0; i < node.childCount; i++) {\n    const child = node.child(i);\n    if (child && hasComputedOutputRedirect(child, words)) return true;\n  }\n  return false;\n}"
+          }
+        ]
+      }
     },
     {
       "relative": "src/handlers/gates/bash-command.ts",
       "before": "beb3ac9d82f790a98b8015fa2cb0a611f87ccb0ec19a532aabbb43f487b06908",
-      "after": "6a9cbad10d6837c193b6611347efb4563b2104434b8d265c82f8fcf3adb24b86",
+      "after": "5163244175b8a62b67fe86e455779cb0bd428c8f380a79e122a5101e0107cf27",
       "replacements": [
         {
           "from": "  commands: BashCommand[],\n  agentName: string | undefined,\n  resolver: ScopedPermissionResolver,",
@@ -41,30 +86,81 @@
         {
           "from": "  return withAskingUnits(withChainFloor(winner, results), results);",
           "to": "  // Preserve existing denies, asks and user session grants. For an otherwise\n  // allowed program, show the whole command so the computed destination is\n  // included in both the review and any session approval suggestion.\n  if (computedOutputRedirect && winner.state === \"allow\" && !isSessionGrant(winner)) {\n    const whole = resolveOnBashSurface(command, [], agentName, resolver);\n    const guarded = whole.state === \"allow\" && !isSessionGrant(whole)\n      ? { ...floorToAsk(whole, \"<computed-output-redirect>\"), command }\n      : whole;\n    return withAskingUnits(guarded, [guarded]);\n  }\n  return withAskingUnits(withChainFloor(winner, results), results);"
+        },
+        {
+          "from": "  computedOutputRedirect = false,",
+          "to": "  computedOutputRedirect = false,\n  unresolvedDirectoryChange = false,"
+        },
+        {
+          "from": "  if (computedOutputRedirect && winner.state === \"allow\" && !isSessionGrant(winner)) {",
+          "to": "  if ((computedOutputRedirect || unresolvedDirectoryChange) && winner.state === \"allow\" && !isSessionGrant(winner)) {"
+        },
+        {
+          "from": "floorToAsk(whole, \"<computed-output-redirect>\")",
+          "to": "floorToAsk(whole, unresolvedDirectoryChange ? \"<unresolved-directory-change>\" : \"<computed-output-redirect>\")"
         }
-      ]
+      ],
+      "previous": {
+        "hash": "6a9cbad10d6837c193b6611347efb4563b2104434b8d265c82f8fcf3adb24b86",
+        "replacements": [
+          {
+            "from": "  commands: BashCommand[],\n  agentName: string | undefined,\n  resolver: ScopedPermissionResolver,",
+            "to": "  commands: BashCommand[],\n  agentName: string | undefined,\n  resolver: ScopedPermissionResolver,\n  computedOutputRedirect = false,"
+          },
+          {
+            "from": "  return withAskingUnits(withChainFloor(winner, results), results);",
+            "to": "  // Preserve existing denies, asks and user session grants. For an otherwise\n  // allowed program, show the whole command so the computed destination is\n  // included in both the review and any session approval suggestion.\n  if (computedOutputRedirect && winner.state === \"allow\" && !isSessionGrant(winner)) {\n    const whole = resolveOnBashSurface(command, [], agentName, resolver);\n    const guarded = whole.state === \"allow\" && !isSessionGrant(whole)\n      ? { ...floorToAsk(whole, \"<computed-output-redirect>\"), command }\n      : whole;\n    return withAskingUnits(guarded, [guarded]);\n  }\n  return withAskingUnits(withChainFloor(winner, results), results);"
+          }
+        ]
+      }
     },
     {
       "relative": "src/handlers/gates/tool-call-gate-pipeline.ts",
       "before": "85c2ecf1312de1b54e06862508f673b0b2fbca98abf8039197b9854a2247f88b",
-      "after": "72e20cc5e7c489a64a2ecc9b8826fe9f91e15f410c2c1c73398bfa2d5c3e0bda",
+      "after": "7f442462808de33ced7dcdd7dddaf5fa3c4b52edadf81e24097d5e7a0eb658ac",
       "replacements": [
         {
           "from": "            this.resolver,\n          ),",
           "to": "            this.resolver,\n            bashProgram.hasComputedOutputRedirect(),\n          ),"
+        },
+        {
+          "from": "            bashProgram.hasComputedOutputRedirect(),",
+          "to": "            bashProgram.hasComputedOutputRedirect(),\n            bashProgram.hasUnresolvedDirectoryChange(),"
         }
-      ]
+      ],
+      "previous": {
+        "hash": "72e20cc5e7c489a64a2ecc9b8826fe9f91e15f410c2c1c73398bfa2d5c3e0bda",
+        "replacements": [
+          {
+            "from": "            this.resolver,\n          ),",
+            "to": "            this.resolver,\n            bashProgram.hasComputedOutputRedirect(),\n          ),"
+          }
+        ]
+      }
     },
     {
       "relative": "src/service/bash-advisory-check.ts",
       "before": "aeb6f3a7c9735faef619f34c98a569a3eb5f255c656835062a6b40f0f69ba893",
-      "after": "dceeaf65c746e0fff4729f72ff9aa61dfd705c45db573e7733cff0ef211940ec",
+      "after": "24748b9c0927c421fd00c23c76e5b2f1578bd6477a090db17370b5ed462e770a",
       "replacements": [
         {
           "from": "    resolver,\n  );",
           "to": "    resolver,\n    program.hasComputedOutputRedirect(),\n  );"
+        },
+        {
+          "from": "    program.hasComputedOutputRedirect(),",
+          "to": "    program.hasComputedOutputRedirect(),\n    program.hasUnresolvedDirectoryChange(),"
         }
-      ]
+      ],
+      "previous": {
+        "hash": "dceeaf65c746e0fff4729f72ff9aa61dfd705c45db573e7733cff0ef211940ec",
+        "replacements": [
+          {
+            "from": "    resolver,\n  );",
+            "to": "    resolver,\n    program.hasComputedOutputRedirect(),\n  );"
+          }
+        ]
+      }
     }
   ]
 }

@@ -22,11 +22,15 @@ for (const file of spec.files) {
   if (!target.startsWith(directory + path.sep)) throw new Error('Patch target escaped the package');
   const original = fs.readFileSync(target, 'utf8');
   const digest = hash(original);
-  if (![file.before, file.after].includes(digest)) throw new Error(`Unexpected source in ${file.relative}; nothing was written.`);
+  if (![file.before, file.after, file.previous?.hash].includes(digest)) throw new Error(`Unexpected source in ${file.relative}; nothing was written.`);
   const want = mode === '--revert' ? file.before : file.after;
   if (digest === want) continue;
   let updated = original;
-  const replacements = mode === '--revert' ? [...file.replacements].reverse().map(({from,to}) => ({from:to,to:from})) : file.replacements;
+  // Normalize a recognized installed patch to upstream, then apply the latest.
+  // This also upgrades the previous computed-redirect-only patch safely.
+  const installedEdits = digest === file.after ? file.replacements : digest === file.previous?.hash ? file.previous.replacements : [];
+  const reverse = [...installedEdits].reverse().map(({from,to}) => ({from:to,to:from}));
+  const replacements = [...reverse, ...(mode === '--revert' ? [] : file.replacements)];
   for (const {from,to} of replacements) {
     if (updated.split(from).length !== 2) throw new Error(`Patch match is not unique in ${file.relative}`);
     updated = updated.replace(from, () => to);
