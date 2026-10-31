@@ -159,6 +159,7 @@
       "echo": "allow",
       "echo *": "allow",
       "cd *": "allow",
+      "sed *": "allow",
       "pwd": "allow",
       "ls": "allow",
       "ls *": "allow",

@@ -167,6 +167,7 @@ function digestTree(dir) {
   }
   // WSL paths are not Git Bash drive mounts; retain the boundary prompt.
   await test('different shell path','WSL spelling stays external in Git Bash','bash',{command:'cd "/mnt/c/'+cwd.slice(3)+'" && ls'},{state:'ask'});
+  await require('./sed-cases.cjs')({test,cwd,outside});
   const denied=engine();await test('user decisions','user denies project write','write',{path:'new.txt',content:'x'},{state:'ask-denied',prompts:1},{e:denied,decision:'deny'});
   const once=engine();for(let i=0;i<2;i++)await test('user decisions','approve once asks again '+i,'write',{path:'new.txt',content:'x'},{state:'ask',prompts:1},{e:once});
   const session=engine();await test('session approvals','first write session approval','write',{path:'src/new.txt',content:'x'},{state:'ask',prompts:1},{e:session,grant:true});

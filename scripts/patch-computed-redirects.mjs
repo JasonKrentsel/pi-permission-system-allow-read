@@ -22,13 +22,14 @@ for (const file of spec.files) {
   if (!target.startsWith(directory + path.sep)) throw new Error('Patch target escaped the package');
   const original = fs.readFileSync(target, 'utf8');
   const digest = hash(original);
-  if (![file.before, file.after, file.previous?.hash].includes(digest)) throw new Error(`Unexpected source in ${file.relative}; nothing was written.`);
+  const previous = (file.previousVersions || [file.previous].filter(Boolean)).find(version => version.hash === digest);
+  if (![file.before, file.after].includes(digest) && !previous) throw new Error(`Unexpected source in ${file.relative}; nothing was written.`);
   const want = mode === '--revert' ? file.before : file.after;
   if (digest === want) continue;
   let updated = original;
   // Normalize a recognized installed patch to upstream, then apply the latest.
-  // This also upgrades the previous computed-redirect-only patch safely.
-  const installedEdits = digest === file.after ? file.replacements : digest === file.previous?.hash ? file.previous.replacements : [];
+  // This also upgrades earlier redirect/cd patch versions safely.
+  const installedEdits = digest === file.after ? file.replacements : previous?.replacements || [];
   const reverse = [...installedEdits].reverse().map(({from,to}) => ({from:to,to:from}));
   const replacements = [...reverse, ...(mode === '--revert' ? [] : file.replacements)];
   for (const {from,to} of replacements) {
@@ -41,5 +42,5 @@ for (const file of spec.files) {
 // Validate every file before changing any file. --check is read-only.
 if (mode !== '--check') for (const {target,updated} of changes) fs.writeFileSync(target, updated);
 console.log(mode === '--check'
-  ? (changes.length ? `Patch not applied: ${changes.length} files need changes.` : 'Computed-redirect patch is applied and verified.')
+  ? (changes.length ? `Patch not applied: ${changes.length} files need changes.` : 'Permission source patch is applied and verified.')
   : `${mode === '--revert' ? 'Reverted' : 'Applied'} ${changes.length} files.`);
