@@ -4,7 +4,7 @@ A personal configuration for [gotgenes/pi-permission-system](https://github.com/
 
 The goal is to keep ordinary exploration quick while giving the user a moment to review changes and complex commands.
 
-Use the configuration together with the source patch below. The `cd *` and `sed *` rules rely on that patch to keep unresolved directory changes and unproven sed programs asking.
+Use the configuration together with the source patch below. The `cd *`, `sed *`, and `find *` rules rely on that patch to keep unresolved directory changes, unproven sed programs, and find write/execution actions asking.
 
 ## Behavior
 
@@ -14,6 +14,9 @@ Use the configuration together with the source patch below. The `cd *` and `sed 
 | Listed read-only Bash commands and ordinary Git inspection | Allow |
 | Recognized read-only `sed` programs, including printing ranges, filtering, and stdout substitutions | Allow |
 | `sed` in-place edits, program-level writes/execution, script files, computed arguments, or unrecognized syntax | Ask |
+| Ordinary `find` searches, including its implicit current directory | Allow |
+| `find` delete, file-output, or execution actions; computed arguments that could supply actions | Ask |
+| `for` loops, including read-only loops | Ask; body commands and substitutions are also checked |
 | Literal `cd` into the current project, including Git Bash `/c/...` and `/C/...` drive paths | Allow; the rest of the command is checked separately |
 | `cd` outside the project or an unresolved destination such as `cd "$DIR"` | Ask |
 | Formatting with `echo`, including arbitrary strings | Allow |
@@ -52,9 +55,9 @@ Copy-Item -LiteralPath ./config.json -Destination (Join-Path $permissionDirector
 
 Apply the source patch below as part of this setup, then restart Pi. Project-specific policies and session approvals can change the effective decisions.
 
-## Source patch: computed redirects, directory changes, and sed
+## Source patch: computed redirects, directory changes, sed, and find
 
-The JSON alone cannot enforce the intended behavior for computed redirects, unresolved directory changes, or sed scripts in upstream 41.0.0. This repository includes the local source patch used with this configuration. For example, these computed writes must ask:
+The JSON alone cannot enforce the intended behavior for computed redirects, unresolved directory changes, sed scripts, or find actions in upstream 41.0.0. This repository includes the local source patch used with this configuration. For example, these computed writes must ask:
 
 ```bash
 cat README.md > "$OUTPUT"
@@ -89,6 +92,12 @@ The following ask:
 
 This applies to stdin pipelines and nested command substitutions too, where there may be no input filename for the path gate to inspect. Explicit secret input files remain denied and outside-project inputs ask. `--sandbox` does not waive the checks; for example, `sed --sandbox -i ...` still asks. See the [GNU sed documentation](https://www.gnu.org/software/sed/manual/sed.html) for sed's separate file-writing and execution facilities.
 
+### Find and for loops
+
+Ordinary `find` predicates and stdout output such as `-name`, `-type`, `-print`, `-print0`, `-printf`, and `-ls` are allowed. The patch promotes upstream's read-effect retraction to a command approval when find carries `-delete`, `-fprint`, `-fprint0`, `-fprintf`, `-fls`, `-exec`, `-execdir`, `-ok`, `-okdir`, or a computed argument that could supply an action. This matters for commands such as `find -delete`: GNU find's implicit current directory leaves no literal starting path for the path gate to inspect. Nested substitutions and command chains receive the same check.
+
+There is no `for *` allow rule. Pi's existing parser submits the whole loop for review and separately checks its body and nested execution. Even a read-only loop such as `for f in src/*.txt; do cat "$f"; done` asks; a write or an explicit secret read in the body cannot be hidden by an allowed leading command. Loop-variable paths remain subject to the previously documented limitations on unresolved reads.
+
 Check or apply the patch with Node.js:
 
 ```text
@@ -96,7 +105,7 @@ node scripts/patch-computed-redirects.mjs --check
 node scripts/patch-computed-redirects.mjs --apply
 ```
 
-The default package location is `~/.pi/agent/npm/node_modules/@gotgenes/pi-permission-system`. Pass a different package directory as an argument, or set `PI_PERMISSION_PACKAGE`. The script checks the package version and exact source hashes before writing, is safe to reapply, upgrades earlier versions of this patch, and supports `--revert`. Restart Pi afterward. Reinstalling or upgrading the upstream package can overwrite this local patch. If reverting the patch, also remove the `cd *` and `sed *` allow rules to restore prompts for those commands.
+The default package location is `~/.pi/agent/npm/node_modules/@gotgenes/pi-permission-system`. Pass a different package directory as an argument, or set `PI_PERMISSION_PACKAGE`. The script checks the package version and exact source hashes before writing, is safe to reapply, upgrades earlier versions of this patch, and supports `--revert`. Restart Pi afterward. Reinstalling or upgrading the upstream package can overwrite this local patch. If reverting the patch, also remove the `cd *`, `sed *`, and `find *` allow rules to restore prompts for those commands.
 
 This is a configuration and a local patch, not an upstream release or a separate permission extension. The patch modifies four upstream source files; it does not change the JSON policy.
 
@@ -110,7 +119,7 @@ This is a configuration and a local patch, not an upstream release or a separate
 
 ## Verification
 
-The decision-level regression suite contains **3,066 checks** when junction fixtures are available, including 518 sed cases, 267 computed-redirect cases, 72 literal `/dev/null` cases, 47 directory-change cases, and 126 ordinary in-project edit/write path variants that each ask exactly once. Six junction checks are skipped if local permissions prevent creating those fixtures. Alias and session tests assert the accepted behavior above. Pi startup was also checked with the patched extension.
+The decision-level regression suite contains **3,157 checks** when junction fixtures are available, including 91 find/for cases, 518 sed cases, 267 computed-redirect cases, 72 literal `/dev/null` cases, 47 directory-change cases, and 126 ordinary in-project edit/write path variants that each ask exactly once. Six junction checks are skipped if local permissions prevent creating those fixtures. Alias and session tests assert the accepted behavior above. Pi startup was also checked with the patched extension.
 
 Run the suite against your installed extension:
 
