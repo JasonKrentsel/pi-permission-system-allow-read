@@ -11,7 +11,7 @@ Use the configuration together with the source patch below. The `cd *`, `sed *`,
 | Operation | Decision |
 | --- | --- |
 | Read, grep, find, or list ordinary files inside the current directory tree | Allow |
-| Listed read-only Bash commands and ordinary Git inspection | Allow |
+| Listed read-only Bash commands, ordinary Git inspection, and standalone delays such as `sleep 1` | Allow |
 | Recognized read-only `sed` programs, including printing ranges, filtering, and stdout substitutions | Allow |
 | `sed` in-place edits, program-level writes/execution, script files, computed arguments, or unrecognized syntax | Ask |
 | Ordinary `find` searches, including its implicit current directory | Allow |
@@ -119,7 +119,7 @@ This is a configuration and a local patch, not an upstream release or a separate
 
 ## Verification
 
-The decision-level regression suite contains **3,157 checks** when junction fixtures are available, including 91 find/for cases, 518 sed cases, 267 computed-redirect cases, 72 literal `/dev/null` cases, 47 directory-change cases, and 126 ordinary in-project edit/write path variants that each ask exactly once. Six junction checks are skipped if local permissions prevent creating those fixtures. Alias and session tests assert the accepted behavior above. Pi startup was also checked with the patched extension.
+The decision-level regression suite contains **3,165 checks** when junction fixtures are available, including eight sleep cases, 91 find/for cases, 518 sed cases, 267 computed-redirect cases, 72 literal `/dev/null` cases, 47 directory-change cases, and 126 ordinary in-project edit/write path variants that each ask exactly once. Six junction checks are skipped if local permissions prevent creating those fixtures. Alias and session tests assert the accepted behavior above. Pi startup was also checked with the patched extension.
 
 Run the suite against your installed extension:
 

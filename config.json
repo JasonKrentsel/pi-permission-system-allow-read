@@ -161,6 +161,7 @@
       "cd *": "allow",
       "sed *": "allow",
       "pwd": "allow",
+      "sleep *": "allow",
       "ls": "allow",
       "ls *": "allow",
       "cat *": "allow",
