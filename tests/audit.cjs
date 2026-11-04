@@ -45,11 +45,13 @@ function digestTree(dir) {
   const {ToolCallGatePipeline}=await mod('handlers/gates/tool-call-gate-pipeline');
   const {GateRunner}=await mod('handlers/gates/runner');
   const {validateUnifiedConfig}=await mod('config/config-loader');
-  const normalFiles=['src/example.ts','src/name with spaces.txt','src/naïve-文.txt','src/a.txt','new/nested/output.txt','output','src/environment.ts'];
+  const templateFiles=['.env.example','src/.env.example','src/service.env.example','certs/server.key.example','.aws/credentials.example'];
+  const normalFiles=['src/example.ts','src/name with spaces.txt','src/naïve-文.txt','src/a.txt','new/nested/output.txt','output','src/environment.ts',...templateFiles];
   for(const f of normalFiles)put('project/'+f);
   put('project-sibling/outside.txt');put('project-sibling/.env');
+  put('project-sibling/.env.example');
   fs.mkdirSync(cwd+'/hw2',{recursive:true});
-  const secretFiles=['.env','.env.local','.env.production','.env.example','src/.env','src/.env.test','src/normal.env.txt','config/service.env','certs/server.pem','certs/server.key','certs/server.crt','certs/server.cer','certs/server.der','certs/bundle.p12','certs/bundle.pfx','certs/bundle.p7b','certs/bundle.p7c','certs/trust.jks','certs/trust.keystore','.ssh/id_rsa','.ssh/id_ed25519','.ssh/config','.aws/credentials','.azure/token.json','.gnupg/keys.txt','.kube/config','.npmrc','.netrc','_netrc','.pypirc','.git-credentials','.docker/config.json','.config/gh/hosts.yml','GitHub CLI/hosts.yml','credentials.json','service-account-test.json'];
+  const secretFiles=['.env','.env.local','.env.production','.env.example.local','src/.env.example.local','.env.examples','.env.myexample','src/.env','src/.env.test','src/normal.env.txt','config/service.env','certs/server.pem','certs/server.key','certs/server.crt','certs/server.cer','certs/server.der','certs/bundle.p12','certs/bundle.pfx','certs/bundle.p7b','certs/bundle.p7c','certs/trust.jks','certs/trust.keystore','.ssh/id_rsa','.ssh/id_ed25519','.ssh/config','.aws/credentials','.azure/token.json','.gnupg/keys.txt','.kube/config','.npmrc','.netrc','_netrc','.pypirc','.git-credentials','.docker/config.json','.config/gh/hosts.yml','GitHub CLI/hosts.yml','credentials.json','service-account-test.json'];
   for(const f of secretFiles)put('project/'+f);
   put('project-read-ask.json',JSON.stringify({permission:{read:'ask'}}));
   put('project-invalid.json',JSON.stringify({permission:{path_wrote:'deny'}}));
@@ -169,6 +171,21 @@ function digestTree(dir) {
   await test('different shell path','WSL spelling stays external in Git Bash','bash',{command:'cd "/mnt/c/'+cwd.slice(3)+'" && ls'},{state:'ask'});
   await require('./sed-cases.cjs')({test,cwd,outside});
   await require('./find-for-cases.cjs')({test});
+  for (const file of templateFiles) {
+    for (const command of ['cat '+file, 'head -n 1 '+file, "sed -n '1p' "+file]) {
+      await test('example suffix Bash read', command, 'bash', {command}, {state:'allow',prompts:0});
+    }
+    const command='echo template > '+file;
+    await test('example suffix Bash write', command, 'bash', {command}, {state:'ask',prompts:1});
+  }
+  for (const file of ['.env.example.local','src/.env.example.local','.env.examples','.env.myexample']) {
+    const command='cat '+file;
+    await test('example suffix near miss', command, 'bash', {command}, {state:'deny',prompts:0});
+  }
+  for (const tool of ['read','write','edit']) {
+    await test('example outside boundary', tool+' outside .env.example', tool,
+      {path:outside+'/.env.example',content:'template',oldText:'x',newText:'y'}, {state:'ask'});
+  }
   for (const [command, state] of [
     ['sleep 1', 'allow'],
     ['sleep 0.1', 'allow'],

@@ -80,7 +80,8 @@
       "*/service-account*.json": "deny",
       "~/.pi/agent/auth.json": "deny",
       "~/.pi/agent/mcp-auth.json": "deny",
-      "~/.codex/auth.json": "deny"
+      "~/.codex/auth.json": "deny",
+      "*.example": "allow"
     },
     "path_write": {
       "*": "ask",
@@ -146,7 +147,8 @@
       "*/service-account*.json": "deny",
       "~/.pi/agent/auth.json": "deny",
       "~/.pi/agent/mcp-auth.json": "deny",
-      "~/.codex/auth.json": "deny"
+      "~/.codex/auth.json": "deny",
+      "*.example": "ask"
     },
     "external_directory_read": {
       "*": "ask"

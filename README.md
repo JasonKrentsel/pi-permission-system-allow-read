@@ -25,6 +25,7 @@ Use the configuration together with the source patch below. The `cd *`, `sed *`,
 | Literal `/dev/null`, `/dev/stdout`, or `/dev/stderr` destinations | Allow |
 | Access outside the current directory tree | Ask; outside writes can encounter an additional boundary prompt |
 | Explicitly named `.env`, certificates, private keys, and listed credential paths | Deny |
+| Filenames ending in `.example`, including `.env.example`, inside the project | Allow reads and ask for edits/writes |
 | Unknown tools, scripts, installs, tests, PowerShell commands, or unlisted Bash commands | Ask |
 
 `write` and `edit` are allowed at the tool surface because `path_write` supplies the approval. Asking at both surfaces produces duplicate prompts. Keep the path rules when modifying this configuration.
@@ -90,7 +91,7 @@ The following ask:
 - `-f`/`--file`, additional-file reads through `r`/`R`, computed arguments, globs, malformed scripts, and syntax outside the upstream grammar. Some harmless commands therefore still ask.
 - Shell output redirects to ordinary files, including computed destinations; literal `/dev/null` remains allowed.
 
-This applies to stdin pipelines and nested command substitutions too, where there may be no input filename for the path gate to inspect. Explicit secret input files remain denied and outside-project inputs ask. `--sandbox` does not waive the checks; for example, `sed --sandbox -i ...` still asks. See the [GNU sed documentation](https://www.gnu.org/software/sed/manual/sed.html) for sed's separate file-writing and execution facilities.
+This applies to stdin pipelines and nested command substitutions too, where there may be no input filename for the path gate to inspect. Explicit secret input files remain denied, with the `.example` template exception below, and outside-project inputs ask. `--sandbox` does not waive the checks; for example, `sed --sandbox -i ...` still asks. See the [GNU sed documentation](https://www.gnu.org/software/sed/manual/sed.html) for sed's separate file-writing and execution facilities.
 
 ### Find and for loops
 
@@ -114,12 +115,13 @@ This is a configuration and a local patch, not an upstream release or a separate
 - Broad session approvals may supersede secret-file denies. This is intentional for this setup.
 - Windows alternate-stream file aliases are not covered by the secret patterns. Their existing behavior is intentional for this setup.
 - Explicit secret filenames are checked, but recursive searches, shell globs, and unresolved variable reads can reach contents without explicitly naming those filenames. This is a review-oriented permission configuration, not filesystem isolation.
-- `.env.example` and other names matched by `*.env.*` are denied too.
+- Filenames ending in the exact suffix `.example` are treated as templates. The final `*.example` rules allow reads and require approval for edits/writes, overriding earlier secret-name rules. This includes nested templates such as `src/.env.example`. On Windows the match is case-insensitive. Outside-project access still asks.
+- Other names matched by `*.env.*`, including `.env.example.local`, `.env.examples`, and `.env.myexample`, stay denied. The exception requires `.example` at the end of the filename.
 - PowerShell and unconfigured alternative shell tools ask, but do not receive Bash-specific path analysis.
 
 ## Verification
 
-The decision-level regression suite contains **3,165 checks** when junction fixtures are available, including eight sleep cases, 91 find/for cases, 518 sed cases, 267 computed-redirect cases, 72 literal `/dev/null` cases, 47 directory-change cases, and 126 ordinary in-project edit/write path variants that each ask exactly once. Six junction checks are skipped if local permissions prevent creating those fixtures. Alias and session tests assert the accepted behavior above. Pi startup was also checked with the patched extension.
+The decision-level regression suite contains **3,570 checks** when junction fixtures are available. Template checks cover relative/absolute paths, Windows spellings, Bash reads/writes, suffix near misses, and outside-project access. Other coverage includes eight sleep cases, 91 find/for cases, 518 sed cases, 267 computed-redirect cases, 72 literal `/dev/null` cases, and 47 directory-change cases. Every tested ordinary in-project edit/write path variant asks exactly once. Six junction checks are skipped if local permissions prevent creating those fixtures. Alias and session tests assert the accepted behavior above. Pi startup was also checked with the patched extension.
 
 Run the suite against your installed extension:
 
